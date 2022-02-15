@@ -1,3 +1,4 @@
+
 import React, { FC } from 'react'
 import hydrate from 'next-mdx-remote/hydrate'
 import { majorScale, Pane, Heading, Spinner } from 'evergreen-ui'
@@ -6,9 +7,11 @@ import { useRouter } from 'next/router'
 import fs from 'fs'
 import path from 'path'
 import matter from 'gray-matter'
+import renderToString from 'next-mdx-remote/render-to-string'
 import { Post } from '../../types'
 import Container from '../../components/container'
 import HomeNav from '../../components/homeNav'
+import { posts } from '../../content'
 
 const BlogPost: FC<Post> = ({ source, frontMatter }) => {
   const content = hydrate(source)
@@ -59,7 +62,33 @@ export function getStaticPaths() {
 
   return {
     paths: slugs.map((s) => ({ params: { slug: s.slug } })),
-    fallback: false,
+    // attempt to render a page that wasn't previously rendered at build time
+    fallback: true,
+  }
+}
+
+export async function getStaticProps({ params, preview }) {
+  let post
+  try {
+    const filesPath = path.join(process.cwd(), 'posts', `${params.slug}.mdx`)
+    post = fs.readFileSync(filesPath, 'utf-8')
+  } catch {
+    const cmsPosts = posts.published.map((p) => {
+      return matter(p)
+    })
+
+    const match = cmsPosts.find((p) => p.data.slug === params.slug)
+    post = match.content
+  }
+
+  const { data } = matter(post)
+  const mdxSource = await renderToString(post, { scope: data })
+
+  return {
+    props: {
+      source: mdxSource,
+      frontMatter: data,
+    },
   }
 }
 
